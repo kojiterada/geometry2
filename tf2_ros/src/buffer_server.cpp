@@ -48,6 +48,10 @@ namespace tf2_ros
   {
     ros::NodeHandle n;
     check_timer_ = n.createTimer(check_period, boost::bind(&BufferServer::checkTransforms, this, _1));
+    ros::NodeHandle service_handle("~");
+    srv_ = service_handle.advertiseService("lookup_transform",
+					      &BufferServer::serviceCB,
+					      this);
   }
 
   void BufferServer::checkTransforms(const ros::TimerEvent& e)
@@ -189,6 +193,51 @@ namespace tf2_ros
     active_goals_.push_back(goal_info);
   }
 
+  bool BufferServer::serviceCB(tf2_msgs::LookupTransform::Request& req,
+			       tf2_msgs::LookupTransform::Response& res)
+  {
+    if(canTransform(req)) 
+    {
+      try
+      {
+        res.transform = lookupTransform(req);
+      }
+      catch (tf2::ConnectivityException &ex)
+      {
+        res.error.error = res.error.CONNECTIVITY_ERROR;
+        res.error.error_string = ex.what();
+      }
+      catch (tf2::LookupException &ex)
+      {
+        res.error.error = res.error.LOOKUP_ERROR;
+        res.error.error_string = ex.what();
+      }
+      catch (tf2::ExtrapolationException &ex)
+      {
+        res.error.error = res.error.EXTRAPOLATION_ERROR;
+        res.error.error_string = ex.what();
+      }
+      catch (tf2::InvalidArgumentException &ex)
+      {
+        res.error.error = res.error.INVALID_ARGUMENT_ERROR;
+        res.error.error_string = ex.what();
+      }
+      catch (tf2::TimeoutException &ex)
+      {
+        res.error.error = res.error.TIMEOUT_ERROR;
+        res.error.error_string = ex.what();
+      }
+      catch (tf2::TransformException &ex)
+      {
+        res.error.error = res.error.TRANSFORM_ERROR;
+        res.error.error_string = ex.what();
+      }
+      return true;
+    }
+
+    boost::mutex::scoped_lock l(mutex_);
+  }
+
   bool BufferServer::canTransform(GoalHandle gh)
   {
     const tf2_msgs::LookupTransformGoal::ConstPtr& goal = gh.getGoal();
@@ -201,6 +250,15 @@ namespace tf2_ros
         goal->source_frame, goal->source_time, goal->fixed_frame);
   }
 
+  bool BufferServer::canTransform(tf2_msgs::LookupTransform::Request& req)
+  {
+    if(!req.advanced)
+      return buffer_.canTransform(req.target_frame, req.source_frame, req.source_time);
+
+    return buffer_.canTransform(req.target_frame, req.target_time, 
+        req.source_frame, req.source_time, req.fixed_frame);
+  }
+
   geometry_msgs::TransformStamped BufferServer::lookupTransform(GoalHandle gh)
   {
     const tf2_msgs::LookupTransformGoal::ConstPtr& goal = gh.getGoal();
@@ -211,6 +269,15 @@ namespace tf2_ros
 
     return buffer_.lookupTransform(goal->target_frame, goal->target_time, 
         goal->source_frame, goal->source_time, goal->fixed_frame);
+  }
+
+  geometry_msgs::TransformStamped BufferServer::lookupTransform(tf2_msgs::LookupTransform::Request& req)
+  {
+    if(!req.advanced)
+      return buffer_.lookupTransform(req.target_frame, req.source_frame, req.source_time);
+
+    return buffer_.lookupTransform(req.target_frame, req.target_time, 
+        req.source_frame, req.source_time, req.fixed_frame);
   }
 
   void BufferServer::start()

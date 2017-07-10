@@ -39,6 +39,7 @@
 
 #include <actionlib/server/action_server.h>
 #include <tf2_msgs/LookupTransformAction.h>
+#include <tf2_msgs/LookupTransform.h>
 #include <geometry_msgs/TransformStamped.h>
 #include <tf2_ros/buffer.h>
 
@@ -54,7 +55,7 @@ namespace tf2_ros
     private:
       typedef actionlib::ActionServer<tf2_msgs::LookupTransformAction> LookupTransformServer;
       typedef LookupTransformServer::GoalHandle GoalHandle;
-
+      
       struct GoalInfo
       {
         GoalHandle handle;
@@ -80,13 +81,18 @@ namespace tf2_ros
       void cancelCB(GoalHandle gh);
       void checkTransforms(const ros::TimerEvent& e);
       bool canTransform(GoalHandle gh);
+      bool canTransform(tf2_msgs::LookupTransform::Request& req);
+      bool serviceCB(tf2_msgs::LookupTransform::Request& req,
+		     tf2_msgs::LookupTransform::Response& res);
       geometry_msgs::TransformStamped lookupTransform(GoalHandle gh);
+      geometry_msgs::TransformStamped lookupTransform(tf2_msgs::LookupTransform::Request& req);
 
       const Buffer& buffer_;
       LookupTransformServer server_;
       std::list<GoalInfo> active_goals_;
       boost::mutex mutex_;
       ros::Timer check_timer_;
+      ros::ServiceServer srv_;
   };
 }
 #endif
